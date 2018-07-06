@@ -245,7 +245,7 @@ upload.on('end', function (fileInfo, req, res) {
     pdf.moveDown(0.5);
 
     pdf.image(__dirname + '/public/uploads/' + fileInfo.name, {
-        //fit: [500, 400],
+        fit: [500, 750],
         align: 'center',
         valign: 'center'
     });
