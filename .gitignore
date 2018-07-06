@@ -42,3 +42,6 @@ typings/
 # Specific files
 *.js.map
 api/mockdb.js
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore
