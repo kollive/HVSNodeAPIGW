@@ -11,12 +11,11 @@ const fs = require('fs');
 const fetch = require('node-fetch');
 const nodemailer = require('nodemailer');
 const upload = require('jquery-file-upload-middleware');
+const PDFDocument = require('pdfkit');
 
 
 import * as config from "config";
 import * as wrap from 'express-async-wrap';
-
-
 import * as os from "os";
 //const axios = require('axios');
 
@@ -28,20 +27,20 @@ var jwtOptions = {}
 //jwtOptions.jwtFromRequest = ExtractJwt.fromAuthHeader();
 jwtOptions.secretOrKey = 'tasmanianDevil';
 
- // configure upload middleware
- upload.configure({
+// configure upload middleware
+upload.configure({
     uploadDir: __dirname + '/public/uploads',
-    uploadUrl: '/uploads',
-    imageVersions: {
+    uploadUrl: '/uploads'
+});
+
+
+/*
+imageVersions: {
         thumbnail: {
             width: 80,
             height: 80
         }
     }
-});
-
-
-/*
 var strategy = new JwtStrategy(jwtOptions,  function (jwt_payload, next) {
    
     console.log('payload received', jwt_payload);
@@ -182,9 +181,6 @@ async function getURLs(svcName) {
     }
 }
 
-
-
-
 // function to encode file data to base64 encoded string
 function base64_encode(file) {
     // read binary data
@@ -204,10 +200,72 @@ function base64_decode(base64str, file) {
 
 
 //app.use(passport.initialize());
-app.use('/upload', upload.fileHandler());
-app.use(bodyParser.urlencoded({limit :'50mb', extended: true }));
-app.use(bodyParser.json({limit: '50mb'}));
 
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+app.use(bodyParser.json({ limit: '50mb' }));
+
+app.use('/apiupload', upload.fileHandler());
+
+
+// events
+upload.on('begin', function (fileInfo, req, res) {
+    console.log(fileInfo)
+    // fileInfo structure is the same as returned to browser
+    // { 
+    //     name: '3 (3).jpg',
+    //     originalName: '3.jpg',
+    //     size: 79262,
+    //     type: 'image/jpeg',
+    //     delete_type: 'DELETE',
+    //     delete_url: 'http://yourhost/upload/3%20(3).jpg',
+    //     url: 'http://yourhost/uploads/3%20(3).jpg',
+    //     thumbnail_url: 'http://youhost/uploads/thumbnail/3%20(3).jpg' 
+    // }
+});
+upload.on('abort', function (fileInfo, req, res) { });
+upload.on('end', function (fileInfo, req, res) {
+    var pdf = new PDFDocument({
+        size: 'A4', // See other page sizes here: https://github.com/devongovett/pdfkit/blob/d95b826475dd325fb29ef007a9c1bf7a527e9808/lib/page.coffee#L69
+        info: {
+            Title: 'Tile of File Here',
+            Author: 'Buraq',
+        }
+    });
+    console.log("in PDF")
+    //console.log(req.body.filename)
+    // Write stuff into PDF
+    //Set the font size
+    pdf.fontSize(11);
+    //Using a standard PDF font
+    pdf.font('Times-Roman')
+        .text('Hello from Times Roman!')
+        .moveDown(0.5)
+
+    pdf.text('PO Number 123 -- Buraq');
+    pdf.moveDown(0.5);
+
+    pdf.image(__dirname + '/public/uploads/' + fileInfo.name, {
+        //fit: [500, 400],
+        align: 'center',
+        valign: 'center'
+    });
+
+//595,842
+    // Stream contents to a file
+    pdf.pipe(
+        fs.createWriteStream(__dirname + '/public/uploads/file.pdf')
+    )
+        .on('finish', function () {
+            console.log('PDF closed');
+        });
+
+    // Close PDF and write file.
+    pdf.end();
+});
+upload.on('delete', function (fileInfo, req, res) { });
+upload.on('error', function (e, req, res) {
+    console.log(e.message);
+});
 
 app.io = io.sockets.on('connection', function (socket) {
     console.log('a user connected')
@@ -277,112 +335,200 @@ console.log(conf.cols)
     }
 });
 */
+/*
+upload.on("end", function(fileinfo){
 
-app.get('/excel',async function (req, res) {
-    const nodeExcel=require('excel-export');
-    const dateFormat = require('dateformat');
-    var conf={}
-   
-    var arr=[];
+    var user = "buraq";
+    var filemanager = upload.fileManager({
+        targetDir: __dirname + '/public/uploads/' + user,
+        targetUrl: "/uploads/" + fileInfo.sessionID
+    });
 
-    conf.cols=[{
-            caption:'ID.',
-            type:'number',
-            width:3
-        },
-        {
-            caption:'User ID',
-            type:'string',
-            width:50
-        },
-        {
-            caption:'Location',
-            type:'string',
-            width:75
-        },
-        {
-            caption:'SQL',
-            type:'string',
-            width:150
-        },
-        {
-            caption:'Start TM',
-            type:'string',
-            width:75
-        },
-        {
-            caption:'End TM',
-            type:'string',
-            width:75
-        },
-        {
-            caption:'Error',
-            type:'string',
-            width:150
-        },
-        {
-            caption:'Error Desc',
-            type:'string',
-            width:150
-        }
-        ];
-  
-        const parm = [];
-       console.log("Before SQL")
-       console.log(Date.now())
-        const tmpData = await DBase.DB.execSQl("select top 100 gs_id,gs_user_i,gs_oru_i,gs_Sql,gs_strt_tm,gs_end_tm,gs_err,gs_err_desc from tdblog");
+    filemanager.move(fileInfo.name, "", function(err, result) {
+        console.dir(result);
+        var pdf = new PDFDocument({
+            size: 'LEGAL', // See other page sizes here: https://github.com/devongovett/pdfkit/blob/d95b826475dd325fb29ef007a9c1bf7a527e9808/lib/page.coffee#L69
+            info: {
+              Title: 'Tile of File Here',
+              Author: 'Buraq',
+            }
+          });
+          
+          console.log(req.body.filename)
+          pdf.image(__dirname + '/public/uploads/' + user + '/' + req.body.filename, {
+            fit: [250, 300],
+            align: 'center',
+            valign: 'center'
+         });
+          
+          // Write stuff into PDF
+          //pdf.text('Hello World');
+          
+          // Stream contents to a file
+          pdf.pipe(
+            fs.createWriteStream(__dirname + '/public/uploads/' + user + '/file.pdf')
+          )
+            .on('finish', function () {
+              console.log('PDF closed');
+            });
+          
+          // Close PDF and write file.
+          pdf.end();
+    })
+});
+*/
+/*
+app.use('/apiupload', function (req, res, next) {
+    var user = "buraq";
 
-        console.log(tmpData)
-        const resultObj = JSON.parse(tmpData);
-        //console.log(resultObj.data[0]);
-        console.log(Date.now())
-        if (resultObj.data[0].length > 0) {
-            
-            arr=[];
-            for(var i=0;i<resultObj.data[0].length;i++){                
-                var a=[
-                    resultObj.data[0][i].gs_id,
-                    resultObj.data[0][i].gs_user_i,
-                    resultObj.data[0][i].gs_oru_i,
-                    resultObj.data[0][i].gs_Sql,
-                    (dateFormat(resultObj.data[0][i].gs_strt_tm, "mm/dd/yyyy HH:MM:ss")),
-                    (dateFormat(resultObj.data[0][i].gs_end_tm, "mm/dd/yyyy HH:MM:ss")),
-                    resultObj.data[0][i].gs_err,
-                    resultObj.data[0][i].gs_err_desc,
-                ];
-                arr.push(a);
+    console.log("in ")
+    req.filemanager = upload.fileManager({
+        targetDir: __dirname + '/public/uploads/' + user,
+        targetUrl: '/uploads/' + user,
+    });
+
+    
+    req.filemanager.move(req.body.filename, '', function (err, result) {
+        // file gets moved to __dirname + '/public/u/' + user._id + '/profile'
+        if (!err) {
+            var pdf = new PDFDocument({
+                size: 'LEGAL', // See other page sizes here: https://github.com/devongovett/pdfkit/blob/d95b826475dd325fb29ef007a9c1bf7a527e9808/lib/page.coffee#L69
+                info: {
+                  Title: 'Tile of File Here',
+                  Author: 'Buraq',
                 }
-                conf.rows=arr;
-               
-                //conf.rows= resultObj.data[0];
-    var result=nodeExcel.execute(conf);
+              });
+              
+              console.log(req.body.filename)
+              pdf.image(__dirname + '/public/uploads/' + user + '/' + req.body.filename, {
+                fit: [250, 300],
+                align: 'center',
+                valign: 'center'
+             });
+              
+              // Write stuff into PDF
+              //pdf.text('Hello World');
+              
+              // Stream contents to a file
+              pdf.pipe(
+                fs.createWriteStream(__dirname + '/public/uploads/' + user + '/file.pdf')
+              )
+                .on('finish', function () {
+                  console.log('PDF closed');
+                });
+              
+              // Close PDF and write file.
+              pdf.end();
+        }
+    });
+});
+*/
+
+app.get('/excel', async function (req, res) {
+    const nodeExcel = require('excel-export');
+    const dateFormat = require('dateformat');
+    var conf = {}
+
+    var arr = [];
+
+    conf.cols = [{
+        caption: 'ID.',
+        type: 'number',
+        width: 3
+    },
+    {
+        caption: 'User ID',
+        type: 'string',
+        width: 50
+    },
+    {
+        caption: 'Location',
+        type: 'string',
+        width: 75
+    },
+    {
+        caption: 'SQL',
+        type: 'string',
+        width: 150
+    },
+    {
+        caption: 'Start TM',
+        type: 'string',
+        width: 75
+    },
+    {
+        caption: 'End TM',
+        type: 'string',
+        width: 75
+    },
+    {
+        caption: 'Error',
+        type: 'string',
+        width: 150
+    },
+    {
+        caption: 'Error Desc',
+        type: 'string',
+        width: 150
+    }
+    ];
+
+    const parm = [];
+    console.log("Before SQL")
     console.log(Date.now())
-    res.setHeader('Content-Type','application/vnd.openxmlformats');
-    res.setHeader("Content-Disposition","attachment;filename="+"todo.xlsx");
+    const tmpData = await DBase.DB.execSQl("select top 100 gs_id,gs_user_i,gs_oru_i,gs_Sql,gs_strt_tm,gs_end_tm,gs_err,gs_err_desc from tdblog");
+
+    console.log(tmpData)
+    const resultObj = JSON.parse(tmpData);
+    //console.log(resultObj.data[0]);
     console.log(Date.now())
-    res.end(result, 'binary');
-    //res.status(200).send(new Buffer(result.toString(),'binary').toString("base64"));
+    if (resultObj.data[0].length > 0) {
+
+        arr = [];
+        for (var i = 0; i < resultObj.data[0].length; i++) {
+            var a = [
+                resultObj.data[0][i].gs_id,
+                resultObj.data[0][i].gs_user_i,
+                resultObj.data[0][i].gs_oru_i,
+                resultObj.data[0][i].gs_Sql,
+                (dateFormat(resultObj.data[0][i].gs_strt_tm, "mm/dd/yyyy HH:MM:ss")),
+                (dateFormat(resultObj.data[0][i].gs_end_tm, "mm/dd/yyyy HH:MM:ss")),
+                resultObj.data[0][i].gs_err,
+                resultObj.data[0][i].gs_err_desc,
+            ];
+            arr.push(a);
+        }
+        conf.rows = arr;
+
+        //conf.rows= resultObj.data[0];
+        var result = nodeExcel.execute(conf);
+        console.log(Date.now())
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats');
+        res.setHeader("Content-Disposition", "attachment;filename=" + "todo.xlsx");
+        console.log(Date.now())
+        res.end(result, 'binary');
+        //res.status(200).send(new Buffer(result.toString(),'binary').toString("base64"));
     }
 });
 
-app.get('/cadetexcel',async function (req, res) {    
+app.get('/cadetexcel', async function (req, res) {
     var file = __dirname + '/public/CadetListDownloadExcel.xlsx';
     res.download(file); // Set disposition and send it.
 });
-   
-app.get('/budgetexcel',async function (req, res) {    
+
+app.get('/budgetexcel', async function (req, res) {
     var file = __dirname + '/public/budget.xlsx';
     res.download(file); // Set disposition and send it.
 });
 
-app.get('/statusexcel',async function (req, res) {    
+app.get('/statusexcel', async function (req, res) {
     var file = __dirname + '/public/StatusOfCadetApplications.xlsx';
     res.download(file); // Set disposition and send it.
 });
 
 
 //passport.authenticate('jwt', { session: false })
-app.post("/toLoadSvc",  function (req, res) {
+app.post("/toLoadSvc", function (req, res) {
     try {
         console.log(req.get('Authorization'))
         var token = req.get('Authorization');
@@ -411,79 +557,79 @@ app.post("/sendEmail", async function (req, res) {
     try {
         console.log(req.body.hv_email)
         const parm = [];
-        parm[0] =  req.body.hv_email;
+        parm[0] = req.body.hv_email;
         const tmpData = await DBase.DB.execSP("sps_checkemail", parm);
 
         //console.log(tmpData)
         const resultObj = JSON.parse(tmpData);
         console.log(resultObj.data[0]);
         if (resultObj.data[0].length > 0) {
-        
-           
-        /*
-        var transporter = nodemailer.createTransport({
-            host: 'server54.web-hosting.com',
-            port: 465,
-            secure: true,
-            auth: {
-            user: 'venugopal.kolli@hudsonvalleysystems.com',
-            pass: 'Mini8536!'
-            }
-        });
-  
-        var mailOptions = {
-            from: 'venugopal.kolli@hudsonvalleysystems.com',
-            to: 'kollive@gmail.com',
-            subject: 'Sending Email using Node.js',
-            text: 'That was easy!'
-        };
-        */
-        var transporter = nodemailer.createTransport({
-            service: 'gmail',
-            port: 465,
-            secure: true,
-            auth: {
-            user: 'hvscadet@gmail.com',
-            pass: 'HudsonCadet!'
-            }
-        });
-  
-        //console.log( resultObj.data[0][0].hv_pwd_token )
-        var htm = "<div>Hi " + resultObj.data[0][0].hv_first_name + ",<br/><br/> We have received a request to reset your password. <br/> If you did not make this request, just ignore this message.";
-        htm += "Otherwise, you can reset your password using this link<br/><br/>"
-        //htm += "<a href=\'http://localhost:3000/changepwd/" + resultObj.data[0][0].hv_pwd_token + "\'> Click here to reset your password</a><br/>"
-        htm += "<a href=\'http://hvs.selfip.net:3000/changepwd/" + resultObj.data[0][0].hv_pwd_token + "\'> Click here to reset your password</a><br/>"
-        htm += "<br/>Thanks,<br/> The HVS Cadet Team"
 
-        console.log(htm)
-        var mailOptions = {
-            from: 'HVSCadet@gmail.com',
-            to: 'kollive@hotmail.com;' + req.body.hv_email,
-            subject: 'Reset your Password',
-            html: htm,          
-        };
 
-        transporter.sendMail(mailOptions, function(error, info){
-            if (error) {
-            console.log(error);
-            } else {
-            console.log('Email sent: ' + info.response);
-            }
-        });
+            /*
+            var transporter = nodemailer.createTransport({
+                host: 'server54.web-hosting.com',
+                port: 465,
+                secure: true,
+                auth: {
+                user: 'venugopal.kolli@hudsonvalleysystems.com',
+                pass: 'Mini8536!'
+                }
+            });
+      
+            var mailOptions = {
+                from: 'venugopal.kolli@hudsonvalleysystems.com',
+                to: 'kollive@gmail.com',
+                subject: 'Sending Email using Node.js',
+                text: 'That was easy!'
+            };
+            */
+            var transporter = nodemailer.createTransport({
+                service: 'gmail',
+                port: 465,
+                secure: true,
+                auth: {
+                    user: 'hvscadet@gmail.com',
+                    pass: 'HudsonCadet!'
+                }
+            });
 
-        var output = JSON.stringify({ "message": "ok", "token": null, "result": {val: 1, msg: "email sent to reset your password."} });
-        res.status(200).json(output);
-    }else {
-        var output = JSON.stringify({ "message": "ok", "token": null, "result": {val: -1, msg: "Please Enter a Valid email that was registered."}  });
-        res.status(200).json(output);
-    }
+            //console.log( resultObj.data[0][0].hv_pwd_token )
+            var htm = "<div>Hi " + resultObj.data[0][0].hv_first_name + ",<br/><br/> We have received a request to reset your password. <br/> If you did not make this request, just ignore this message.";
+            htm += "Otherwise, you can reset your password using this link<br/><br/>"
+            //htm += "<a href=\'http://localhost:3000/changepwd/" + resultObj.data[0][0].hv_pwd_token + "\'> Click here to reset your password</a><br/>"
+            htm += "<a href=\'http://hvs.selfip.net:3000/changepwd/" + resultObj.data[0][0].hv_pwd_token + "\'> Click here to reset your password</a><br/>"
+            htm += "<br/>Thanks,<br/> The HVS Cadet Team"
+
+            console.log(htm)
+            var mailOptions = {
+                from: 'HVSCadet@gmail.com',
+                to: 'kollive@hotmail.com;' + req.body.hv_email,
+                subject: 'Reset your Password',
+                html: htm,
+            };
+
+            transporter.sendMail(mailOptions, function (error, info) {
+                if (error) {
+                    console.log(error);
+                } else {
+                    console.log('Email sent: ' + info.response);
+                }
+            });
+
+            var output = JSON.stringify({ "message": "ok", "token": null, "result": { val: 1, msg: "email sent to reset your password." } });
+            res.status(200).json(output);
+        } else {
+            var output = JSON.stringify({ "message": "ok", "token": null, "result": { val: -1, msg: "Please Enter a Valid email that was registered." } });
+            res.status(200).json(output);
+        }
         //console.log(resultObj.data[0][0].validToken);
         //console.log(tmpData)
         //console.log(tmpData.data[0].hv_auth_code)
     } catch (e) {
         res.status(500).end();
     }
-   
+
     //res.send(result);
 });
 
@@ -491,21 +637,21 @@ app.post("/getCadets", async function (req, res) {
     var result;
     try {
 
-     
+
         const parm = [];
-        parm[0] =  req.body.name;
-       
+        parm[0] = req.body.name;
+
         const tmpData = await new DBase.DB.execSP("sps_getcadets", parm);
 
         //console.log(tmpData)
         const resultObj = JSON.parse(tmpData);
         //console.log(resultObj.data[0]);
         if (resultObj.data[0].length > 0) {
-                   
-        var output = JSON.stringify({ "token": null, "result": {items: resultObj.data[0], msg: ""} });
-        res.status(200).json(output);
-        }else {
-            var output = JSON.stringify({ "token": null, "result": {items:{}, msg: "Not Found."}  });
+
+            var output = JSON.stringify({ "token": null, "result": { items: resultObj.data[0], msg: "" } });
+            res.status(200).json(output);
+        } else {
+            var output = JSON.stringify({ "token": null, "result": { items: {}, msg: "Not Found." } });
             res.status(200).json(output);
         }
         //console.log(resultObj.data[0][0].validToken);
@@ -515,28 +661,28 @@ app.post("/getCadets", async function (req, res) {
         console.log(e)
         res.status(500).end();
     }
-   
+
     //res.send(result);
 });
 
 app.post("/getMentors", async function (req, res) {
     var result;
     try {
-        
+
         const parm = [];
-        parm[0] =  req.body.name;
-       
+        parm[0] = req.body.name;
+
         const tmpData = await new DBase.DB.execSP("sps_getMentors", parm);
 
         //console.log(tmpData)
         const resultObj = JSON.parse(tmpData);
         //console.log(resultObj.data[0]);
         if (resultObj.data[0].length > 0) {
-                   
-        var output = JSON.stringify({ "token": null, "result": {items: resultObj.data[0], msg: ""} });
-        res.status(200).json(output);
-        }else {
-            var output = JSON.stringify({ "token": null, "result": {items:{}, msg: "Not Found."}  });
+
+            var output = JSON.stringify({ "token": null, "result": { items: resultObj.data[0], msg: "" } });
+            res.status(200).json(output);
+        } else {
+            var output = JSON.stringify({ "token": null, "result": { items: {}, msg: "Not Found." } });
             res.status(200).json(output);
         }
         //console.log(resultObj.data[0][0].validToken);
@@ -546,28 +692,28 @@ app.post("/getMentors", async function (req, res) {
         console.log(e)
         res.status(500).end();
     }
-   
+
     //res.send(result);
 });
 
 app.post("/getBudgets", async function (req, res) {
     var result;
     try {
-        
+
         const parm = [];
-        parm[0] =  req.body.name;
-       
+        parm[0] = req.body.name;
+
         const tmpData = await new DBase.DB.execSP("sps_getBudgets", parm);
 
         //console.log(tmpData)
         const resultObj = JSON.parse(tmpData);
         //console.log(resultObj.data[0]);
         if (resultObj.data[0].length > 0) {
-                   
-        var output = JSON.stringify({ "token": null, "result": {items: resultObj.data[0], msg: ""} });
-        res.status(200).json(output);
-        }else {
-            var output = JSON.stringify({ "token": null, "result": {items:{}, msg: "Not Found."}  });
+
+            var output = JSON.stringify({ "token": null, "result": { items: resultObj.data[0], msg: "" } });
+            res.status(200).json(output);
+        } else {
+            var output = JSON.stringify({ "token": null, "result": { items: {}, msg: "Not Found." } });
             res.status(200).json(output);
         }
         //console.log(resultObj.data[0][0].validToken);
@@ -577,28 +723,28 @@ app.post("/getBudgets", async function (req, res) {
         console.log(e)
         res.status(500).end();
     }
-   
+
     //res.send(result);
 });
 
 app.post("/getPurchases", async function (req, res) {
     var result;
     try {
-        
+
         const parm = [];
-        parm[0] =  req.body.name;
-       
+        parm[0] = req.body.name;
+
         const tmpData = await new DBase.DB.execSP("sps_getPurchases", parm);
 
         //console.log(tmpData)
         const resultObj = JSON.parse(tmpData);
         //console.log(resultObj.data[0]);
         if (resultObj.data[0].length > 0) {
-                   
-        var output = JSON.stringify({ "token": null, "result": {items: resultObj.data[0], msg: ""} });
-        res.status(200).json(output);
-        }else {
-            var output = JSON.stringify({ "token": null, "result": {items:{}, msg: "Not Found."}  });
+
+            var output = JSON.stringify({ "token": null, "result": { items: resultObj.data[0], msg: "" } });
+            res.status(200).json(output);
+        } else {
+            var output = JSON.stringify({ "token": null, "result": { items: {}, msg: "Not Found." } });
             res.status(200).json(output);
         }
         //console.log(resultObj.data[0][0].validToken);
@@ -608,28 +754,28 @@ app.post("/getPurchases", async function (req, res) {
         console.log(e)
         res.status(500).end();
     }
-   
+
     //res.send(result);
 });
 
 app.post("/getApprovals", async function (req, res) {
     var result;
     try {
-        
+
         const parm = [];
-        parm[0] =  req.body.name;
-       
+        parm[0] = req.body.name;
+
         const tmpData = await new DBase.DB.execSP("sps_getApprovals", parm);
 
         //console.log(tmpData)
         const resultObj = JSON.parse(tmpData);
         //console.log(resultObj.data[0]);
         if (resultObj.data[0].length > 0) {
-                   
-        var output = JSON.stringify({ "token": null, "result": {items: resultObj.data[0], msg: ""} });
-        res.status(200).json(output);
-        }else {
-            var output = JSON.stringify({ "token": null, "result": {items:{}, msg: "Not Found."}  });
+
+            var output = JSON.stringify({ "token": null, "result": { items: resultObj.data[0], msg: "" } });
+            res.status(200).json(output);
+        } else {
+            var output = JSON.stringify({ "token": null, "result": { items: {}, msg: "Not Found." } });
             res.status(200).json(output);
         }
         //console.log(resultObj.data[0][0].validToken);
@@ -639,28 +785,28 @@ app.post("/getApprovals", async function (req, res) {
         console.log(e)
         res.status(500).end();
     }
-   
+
     //res.send(result);
 });
 
 app.post("/getSchedules", async function (req, res) {
     var result;
     try {
-        
+
         const parm = [];
-        parm[0] =  req.body.name;
-       
+        parm[0] = req.body.name;
+
         const tmpData = await new DBase.DB.execSP("sps_getSchedules", parm);
 
         //console.log(tmpData)
         const resultObj = JSON.parse(tmpData);
         //console.log(resultObj.data[0]);
         if (resultObj.data[0].length > 0) {
-                   
-        var output = JSON.stringify({ "token": null, "result": {items: resultObj.data[0], msg: ""} });
-        res.status(200).json(output);
-        }else {
-            var output = JSON.stringify({ "token": null, "result": {items:{}, msg: "Not Found."}  });
+
+            var output = JSON.stringify({ "token": null, "result": { items: resultObj.data[0], msg: "" } });
+            res.status(200).json(output);
+        } else {
+            var output = JSON.stringify({ "token": null, "result": { items: {}, msg: "Not Found." } });
             res.status(200).json(output);
         }
         //console.log(resultObj.data[0][0].validToken);
@@ -670,7 +816,7 @@ app.post("/getSchedules", async function (req, res) {
         console.log(e)
         res.status(500).end();
     }
-   
+
     //res.send(result);
 });
 app.post("/changePWD", async function (req, res) {
@@ -680,9 +826,9 @@ app.post("/changePWD", async function (req, res) {
         console.log(req.body.currPWD)
         console.log(req.body.newPWD)
         const parm = [];
-        parm[0] =  req.body.userID;
-        parm[1] =  req.body.currPWD;
-        parm[2] =  req.body.newPWD;
+        parm[0] = req.body.userID;
+        parm[1] = req.body.currPWD;
+        parm[2] = req.body.newPWD;
         parm[3] = req.body.emailReset
 
         const tmpData = await DBase.DB.execSP("spu_updatePWD", parm);
@@ -691,20 +837,20 @@ app.post("/changePWD", async function (req, res) {
         const resultObj = JSON.parse(tmpData);
         console.log(resultObj.data[0]);
         if (resultObj.data[0].length > 0) {
-                   
-        var output = JSON.stringify({ "message": "ok", "token": null, "result": {val: resultObj.data[0][0].hv_return, msg: resultObj.data[0][0].hv_msg} });
-        res.status(200).json(output);
-    }else {
-        var output = JSON.stringify({ "message": "ok", "token": null, "result": {val: -1, msg: "Please contact HelpDesk."}  });
-        res.status(200).json(output);
-    }
+
+            var output = JSON.stringify({ "message": "ok", "token": null, "result": { val: resultObj.data[0][0].hv_return, msg: resultObj.data[0][0].hv_msg } });
+            res.status(200).json(output);
+        } else {
+            var output = JSON.stringify({ "message": "ok", "token": null, "result": { val: -1, msg: "Please contact HelpDesk." } });
+            res.status(200).json(output);
+        }
         //console.log(resultObj.data[0][0].validToken);
         //console.log(tmpData)
         //console.log(tmpData.data[0].hv_auth_code)
     } catch (e) {
         res.status(500).end();
     }
-   
+
     //res.send(result);
 });
 
@@ -715,8 +861,8 @@ app.post("/checkToken", async function (req, res) {
         console.log(req.body.currPWD)
         console.log(req.body.newPWD)
         const parm = [];
-        parm[0] =  req.body.secToken;
-       
+        parm[0] = req.body.secToken;
+
 
         const tmpData = await DBase.DB.execSP("sps_checkPWDToken", parm);
 
@@ -724,25 +870,25 @@ app.post("/checkToken", async function (req, res) {
         const resultObj = JSON.parse(tmpData);
         console.log(resultObj.data[0]);
         if (resultObj.data[0].length > 0) {
-                   
-        var output = JSON.stringify({ "message": "ok", "token": null, "result": {hv_user_id: resultObj.data[0][0].hv_user_id, msg: "", val: 1} });
-        res.status(200).json(output);
-    }else {
-        var output = JSON.stringify({ "message": "ok", "token": null, "result": {val: -1, msg: "Reset Link is not valid. Please contact HelDesk."}  });
-        res.status(200).json(output);
-    }
+
+            var output = JSON.stringify({ "message": "ok", "token": null, "result": { hv_user_id: resultObj.data[0][0].hv_user_id, msg: "", val: 1 } });
+            res.status(200).json(output);
+        } else {
+            var output = JSON.stringify({ "message": "ok", "token": null, "result": { val: -1, msg: "Reset Link is not valid. Please contact HelDesk." } });
+            res.status(200).json(output);
+        }
         //console.log(resultObj.data[0][0].validToken);
         //console.log(tmpData)
         //console.log(tmpData.data[0].hv_auth_code)
     } catch (e) {
         res.status(500).end();
     }
-   
+
     //res.send(result);
 });
 
 
-async function getRoles(uid,lstupdts,funcId){
+async function getRoles(uid, lstupdts, funcId) {
 
     var result;
     try {
@@ -778,7 +924,7 @@ async function getRoles(uid,lstupdts,funcId){
         var parmsObj = JSON.stringify({
             uid: uid,
             lstupdts: lstupdts,
-            funcId :funcId
+            funcId: funcId
         });
 
         //console.log(parmsObj);
@@ -796,7 +942,7 @@ async function getRoles(uid,lstupdts,funcId){
 
     } catch (e) {
         //console.log("in catch")
-        var output = JSON.stringify({ "message": "fail","val": "-1", "result": e.message, "roles": {} });
+        var output = JSON.stringify({ "message": "fail", "val": "-1", "result": e.message, "roles": {} });
         return output;
         //res.status(400).json(output);
         //res.status(500).end();
@@ -809,22 +955,22 @@ async function getRoles(uid,lstupdts,funcId){
     //console.log(JSON.parse(result).message)
     var resultObj = JSON.parse(result);
     if (resultObj.message == "ok") {
-        if(resultObj.hasAccess == "N"){
-            var output = JSON.stringify({ "message": "fail", "val": "-2", "result": resultObj.result,  "roles": {} });
+        if (resultObj.hasAccess == "N") {
+            var output = JSON.stringify({ "message": "fail", "val": "-2", "result": resultObj.result, "roles": {} });
             //res.status(400).json(output);
             return output;
         } else {
-            var output = JSON.stringify({ "message": "ok", "val" : "0", "result" : "", "roles": resultObj.roles});
+            var output = JSON.stringify({ "message": "ok", "val": "0", "result": "", "roles": resultObj.roles });
             return output;
         }
         //res.status(200).json(output);
     } else {
-        if(resultObj.hasAccess == "N"){
-            var output = JSON.stringify({ "message": "fail", "val": "-2", "result": resultObj.result,  "roles": {} });
+        if (resultObj.hasAccess == "N") {
+            var output = JSON.stringify({ "message": "fail", "val": "-2", "result": resultObj.result, "roles": {} });
             //res.status(400).json(output);
             return output;
         } else {
-            var output = JSON.stringify({ "message": "fail", "val": "-1", "result": resultObj.result,  "roles": {} });
+            var output = JSON.stringify({ "message": "fail", "val": "-1", "result": resultObj.result, "roles": {} });
             return output;
             //res.status(400).json(output);
         }
@@ -879,21 +1025,21 @@ app.post("/loginsvc", async function (req, res) {
         const authId = uuidv4(); // ⇨ 'df7cca36-3d7a-40f4-8f06-ae03cc22f045'
 
         var lastupdts = (new Date()).toLocaleDateString();
-        if(req.body.lstupdts) {
+        if (req.body.lstupdts) {
             lastupdts = req.body.lstupdts
         }
         var funcId = "0";
         var roleStr = await getRoles(name, lastupdts, funcId);
         //console.log(roleStr)
-    
+
         var roleObj = JSON.parse(roleStr);
-        var roles= {};
+        var roles = {};
         var lstUpdTs = null;
-        if(roleObj.message == "ok"){
-            if(roleObj.roles) {
+        if (roleObj.message == "ok") {
+            if (roleObj.roles) {
                 roles = roleObj.roles;
             }
-            if(roleObj.lstUpdTs) {
+            if (roleObj.lstUpdTs) {
                 lstUpdTs = roleObj.lstUpdTs;
             }
         }
@@ -918,12 +1064,12 @@ app.post("/loginsvc", async function (req, res) {
             //res.status(500).end();
         }
 
-       
-        var output = JSON.stringify({ "message": "ok", "token": token, "result": JSON.parse(result).result, "name": JSON.parse(result).name, roles : roles });
+
+        var output = JSON.stringify({ "message": "ok", "token": token, "result": JSON.parse(result).result, "name": JSON.parse(result).name, roles: roles });
         res.status(200).json(output);
 
     } else {
-        var output = JSON.stringify({ "message":  JSON.parse(result).result, "result": JSON.parse(result).message });
+        var output = JSON.stringify({ "message": JSON.parse(result).result, "result": JSON.parse(result).message });
         res.status(200).json(output);
     }
     //res.send(result);
@@ -960,14 +1106,14 @@ app.post("/rolesvc", async function (req, res) {
         uid = parms.uid;
         lstupdts = parms.lstupdts;
         funcId = parms.funcId;
-        
+
         //console.log(name)
         //console.log(password)
 
         var parmsObj = JSON.stringify({
             uid: uid,
             lstupdts: lstupdts,
-            funcId :funcId
+            funcId: funcId
         });
 
         console.log(parmsObj);
@@ -999,7 +1145,7 @@ app.post("/rolesvc", async function (req, res) {
         res.status(200).json(output);
 
     } else {
-        if(resultObj.hasAccess == "N"){
+        if (resultObj.hasAccess == "N") {
             var output = JSON.stringify({ "message": "fail", "token": null, "val": "-2", "result": resultObj.result });
             res.status(400).json(output);
         } else {
@@ -1015,9 +1161,9 @@ app.post("/getTables", async function (req, res) {
     var result;
 
     try {
-      
+
         const parm = [];
-        parm[0] =  req.body.tableTag;
+        parm[0] = req.body.tableTag;
         const tmpData = await new DBase.DB.execSP("sps_getAttribTables", parm);
 
         //console.log(tmpData)
@@ -1032,7 +1178,7 @@ app.post("/getTables", async function (req, res) {
         console.log(e)
         res.status(500).end();
     }
-   
+
     //res.send(result);
 });
 
@@ -1042,10 +1188,10 @@ app.post("/GetAttribTable", async function (req, res) {
 
     try {
         console.log("sps_getAttribTableValues")
-        console.log( req.body.hv_table_i)
-        
+        console.log(req.body.hv_table_i)
+
         const parm = [];
-        parm[0] =  req.body.hv_table_i;
+        parm[0] = req.body.hv_table_i;
         const tmpData = await DBase.DB.execSP("sps_getAttribTableValues", parm);
 
         //console.log(tmpData)
@@ -1059,7 +1205,7 @@ app.post("/GetAttribTable", async function (req, res) {
     } catch (e) {
         res.status(500).end();
     }
-   
+
     //res.send(result);
 });
 
@@ -1068,8 +1214,8 @@ app.post("/delAttribTable", async function (req, res) {
 
     try {
         const parm = [];
-        parm[0] =  req.body.hv_table_i;
-        parm[1] =  req.body.hv_universal_i;
+        parm[0] = req.body.hv_table_i;
+        parm[1] = req.body.hv_universal_i;
         const tmpData = await DBase.DB.execSP("spd_AttribTableValues", parm);
 
         //console.log(tmpData)
@@ -1083,7 +1229,7 @@ app.post("/delAttribTable", async function (req, res) {
     } catch (e) {
         res.status(500).end();
     }
-   
+
     //res.send(result);
 });
 
@@ -1092,9 +1238,9 @@ app.post("/updAttribTable", async function (req, res) {
 
     try {
         const parm = [];
-        parm[0] =  req.body.hv_table_i;
-        parm[1] =  req.body.hv_universal_i;
-        parm[2] =  req.body.hv_universal_name;
+        parm[0] = req.body.hv_table_i;
+        parm[1] = req.body.hv_universal_i;
+        parm[2] = req.body.hv_universal_name;
 
         const tmpData = await DBase.DB.execSP("spu_AttribTableValues", parm);
 
@@ -1109,7 +1255,7 @@ app.post("/updAttribTable", async function (req, res) {
     } catch (e) {
         res.status(500).end();
     }
-   
+
     //res.send(result);
 });
 
@@ -1118,8 +1264,8 @@ app.post("/insAttribTable", async function (req, res) {
 
     try {
         const parm = [];
-        parm[0] =  req.body.hv_table_i;
-        parm[1] =  req.body.hv_universal_name;
+        parm[0] = req.body.hv_table_i;
+        parm[1] = req.body.hv_universal_name;
 
         const tmpData = await DBase.DB.execSP("spi_AttribTableValues", parm);
 
@@ -1134,19 +1280,19 @@ app.post("/insAttribTable", async function (req, res) {
     } catch (e) {
         res.status(500).end();
     }
-   
+
     //res.send(result);
 });
 
-app.post('/ExportToExcel',async function (req, res) {
-    const nodeExcel=require('excel-export');
+app.post('/ExportToExcel', async function (req, res) {
+    const nodeExcel = require('excel-export');
     const dateFormat = require('dateformat');
-    var conf={}
-    var arr=[];
+    var conf = {}
+    var arr = [];
 
     conf.stylesXmlFile = "./styles.xml";
-    conf.name="mysheet";
-    
+    conf.name = "mysheet";
+
     conf.cols = JSON.parse(JSON.stringify(req.body.cols));
     console.log(conf.cols)
 
@@ -1171,45 +1317,45 @@ app.post('/ExportToExcel',async function (req, res) {
     console.log(conf.cols)
 */
 
-        const parm = [];
-       //console.log("Before SQL")
-       //console.log(Date.now())
-        const tmpData = await DBase.DB.execSQl(SQL);
-        //console.log(tmpData)
-        const resultObj = JSON.parse(tmpData);
-        //console.log(resultObj.data[0]);
-        //console.log(Date.now())
-        //console.log(resultObj.columns)
-        //console.log(resultObj.columns[0].name)
+    const parm = [];
+    //console.log("Before SQL")
+    //console.log(Date.now())
+    const tmpData = await DBase.DB.execSQl(SQL);
+    //console.log(tmpData)
+    const resultObj = JSON.parse(tmpData);
+    //console.log(resultObj.data[0]);
+    //console.log(Date.now())
+    //console.log(resultObj.columns)
+    //console.log(resultObj.columns[0].name)
     //console.log(Object.keys(resultObj.columns))
     let colNameArr = Object.keys(resultObj.columns);
 
-        if (resultObj.data[0].length > 0) {
-            
-            arr=[];
-            for(var i=0;i<resultObj.data[0].length;i++){  
-                let a = [];
-                colNameArr.forEach((key,index) => {
-                    //console.log(key)
-                    //console.log(resultObj.data[0][i])
-                    //console.log(resultObj.data[0][i][key])                   
-                    a.push(resultObj.data[0][i][key])
-                  });
+    if (resultObj.data[0].length > 0) {
 
-               //console.log(a)
-                arr.push(a);
-                }
-                conf.rows=arr;
-           
-                //console.log(arr)
-                //conf.rows= resultObj.data[0];
-    var result=nodeExcel.execute(conf);
-    console.log(Date.now())
-    res.setHeader('Content-Type','application/vnd.openxmlformats');
-    res.setHeader("Content-Disposition","attachment;filename="+"todo.xlsx");
-    console.log(Date.now())
-    res.end(result, 'binary');
-    //res.status(200).send(new Buffer(result.toString(),'binary').toString("base64"));
+        arr = [];
+        for (var i = 0; i < resultObj.data[0].length; i++) {
+            let a = [];
+            colNameArr.forEach((key, index) => {
+                //console.log(key)
+                //console.log(resultObj.data[0][i])
+                //console.log(resultObj.data[0][i][key])                   
+                a.push(resultObj.data[0][i][key])
+            });
+
+            //console.log(a)
+            arr.push(a);
+        }
+        conf.rows = arr;
+
+        //console.log(arr)
+        //conf.rows= resultObj.data[0];
+        var result = nodeExcel.execute(conf);
+        console.log(Date.now())
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats');
+        res.setHeader("Content-Disposition", "attachment;filename=" + "todo.xlsx");
+        console.log(Date.now())
+        res.end(result, 'binary');
+        //res.status(200).send(new Buffer(result.toString(),'binary').toString("base64"));
     }
 });
 
@@ -1221,7 +1367,7 @@ app.post('/ExportToExcel',async function (req, res) {
 //         console.log("saveuserdetails");
 //         let parmstr= JSON.stringify(req.body.parms);  
 //         let parms = JSON.parse(parmstr);
-        
+
 //         let keyArr = Object.keys(parms);
 //         console.log(parms["hv_first_name"]);
 //         parm[0] = parms["hv_first_name"];
@@ -1250,31 +1396,31 @@ app.post('/ExportToExcel',async function (req, res) {
 //         var output = JSON.stringify({ "message": "fail", "token": null, "result": e.message });
 //         res.status(200).json(output);
 //     }
-  
+
 // });
 
 const checkToken = async (token) => {
-   
+
     console.log('payload received', token);
-    const tmpData,resultObj;
-    
+    const tmpData, resultObj;
+
     //Log the token in database
     try {
-        var parm = [];        
+        var parm = [];
         parm[0] = token;
-       
-        tmpData =  await DBase.DB.execSP("sps_checktoken", parm);
+
+        tmpData = await DBase.DB.execSP("sps_checktoken", parm);
         console.log(tmpData)
         resultObj = JSON.parse(tmpData);
         console.log(resultObj.data[0]);
         console.log(resultObj.data[0][0].validToken);
-       
+
     } catch (e) {
         console.log(e)
         //res.status(500).end();
     }
 
-    if(resultObj.data[0][0].validToken == "Y") {
+    if (resultObj.data[0][0].validToken == "Y") {
         return true;
     } else {
         return false;
@@ -1282,10 +1428,10 @@ const checkToken = async (token) => {
 };
 
 
-app.post("/ExecSP",   async function (req, res, next) {
+app.post("/ExecSP", async function (req, res, next) {
     var result;
     var refreshedToken = null;
-    var roles= {};
+    var roles = {};
     var lstUpdTs;
     var funcId;
     //console.log("execSp")
@@ -1304,7 +1450,7 @@ app.post("/ExecSP",   async function (req, res, next) {
 
     //passport.authenticate('jwt', { session: false }),
     //console.log(req.get('Authorization'))
-    if(req.body.token) {
+    if (req.body.token) {
         var token = req.body.token;//req.get('Authorization');
         token = token.toString().replace("JWT ", "")
 
@@ -1316,18 +1462,18 @@ app.post("/ExecSP",   async function (req, res, next) {
         //console.log((Date.now().valueOf()/ 1000))
         //console.log(new Date(originalDecoded.payload.exp * 1000))
 
-        
-        if( Number(originalDecoded.payload.exp) < (Date.now().valueOf() / 1000)) {
-            var output = JSON.stringify({ "message": "fail", "token": null, "val": "-2", "result":"Token expired." });
+
+        if (Number(originalDecoded.payload.exp) < (Date.now().valueOf() / 1000)) {
+            var output = JSON.stringify({ "message": "fail", "token": null, "val": "-2", "result": "Token expired." });
             return res.status(400).json(output);
         }
-        
+
         var retVal = await checkToken(originalDecoded.payload.authID)
-        if(!retVal) {
-            var output = JSON.stringify({ "message": "fail", "token": null,"val": "-2", "result": "Not a valid token." });
+        if (!retVal) {
+            var output = JSON.stringify({ "message": "fail", "token": null, "val": "-2", "result": "Not a valid token." });
             return res.status(400).json(output);
         }
-        
+
         //var output = JSON.stringify({ "message": "fail", "token": null, "result": "expired" });
         //res.status(200).json(output);
         /*
@@ -1338,51 +1484,51 @@ app.post("/ExecSP",   async function (req, res, next) {
         */
         refreshedToken = jwt.refresh(originalDecoded, Number(config.get(env + ".token").timeout || 300), jwtOptions.secretOrKey);
 
-        if(originalDecoded.payload.lstUpdTs) {
+        if (originalDecoded.payload.lstUpdTs) {
             lstUpdTs = originalDecoded.payload.lstUpdTs;
         } else {
             lstUpdTs = (new Date()).toLocaleDateString();
         }
 
         funcId = "0";
-        if(req.body.funcId) {
+        if (req.body.funcId) {
             funcId = req.body.funcId
         }
 
         var roleStr = await getRoles(originalDecoded.payload.userId, lstUpdTs, funcId);
         console.log(roleStr)
-        var roleObj = JSON.parse(roleStr);       
-        if(roleObj.message == "ok"){
-            if(roleObj.roles) {
+        var roleObj = JSON.parse(roleStr);
+        if (roleObj.message == "ok") {
+            if (roleObj.roles) {
                 roles = roleObj.roles;
                 lstUpdTs = roleObj.lstUpdTs;
                 originalDecoded.payload.lstUpdTs = lstUpdTs;
-                refreshedToken = jwt.refresh(originalDecoded, Number(config.get(env + ".token").timeout || 300), jwtOptions.secretOrKey);            
+                refreshedToken = jwt.refresh(originalDecoded, Number(config.get(env + ".token").timeout || 300), jwtOptions.secretOrKey);
             }
         } else {
             var output;
-            if(roleObj.val == "-2"){
-                output = JSON.stringify({ "message": "fail", "token": null,"val": "-2", "result": roleObj.result});
+            if (roleObj.val == "-2") {
+                output = JSON.stringify({ "message": "fail", "token": null, "val": "-2", "result": roleObj.result });
                 return res.status(400).json(output);
             } else {
-                output = JSON.stringify({ "message": "fail", "token": refreshedToken,"val": roleObj.val, "result": roleObj.result});
+                output = JSON.stringify({ "message": "fail", "token": refreshedToken, "val": roleObj.val, "result": roleObj.result });
                 return res.status(400).json(output);
             }
-        }        
+        }
         //console.log(refreshedToken)
         // new 'exp' value is later in the future. 
         //console.log(JSON.stringify(jwt.decode(refreshed, { complete: true })));           
-        
-    } else {    
+
+    } else {
         // if there is no token
         // return an error
-        var output = JSON.stringify({ "message": "fail", "token": null,"val": "-2", "result": "No token provided." });
+        var output = JSON.stringify({ "message": "fail", "token": null, "val": "-2", "result": "No token provided." });
         return res.status(400).json(output);
     }
-  
+
 
     let spName = req.body.spName;
-    let parmstr= JSON.stringify(req.body.parms);  
+    let parmstr = JSON.stringify(req.body.parms);
     //console.log(parmstr) 
     let parms = JSON.parse(parmstr);
     //console.log(parms)
@@ -1393,20 +1539,20 @@ app.post("/ExecSP",   async function (req, res, next) {
         let keyArr = Object.keys(parms);
         //console.log(keyArr);
         // loop through the object, pushing values to the return array
-        keyArr.forEach((key,index) => {
-          //console.log(key);
-          parm[index] = parms[key];          
+        keyArr.forEach((key, index) => {
+            //console.log(key);
+            parm[index] = parms[key];
         });
 
         //parm[0] =  req.body.hv_table_i;
         //parm[1] =  req.body.hv_universal_name;
 
-        const tmpData =  await DBase.DB.execSP(spName, parm);
+        const tmpData = await DBase.DB.execSP(spName, parm);
 
         //console.log(tmpData)
         const resultObj = JSON.parse(tmpData);
         console.log(resultObj.data[0]);
-        var output = JSON.stringify({ "message": "ok", "token": refreshedToken, "val": "0","result": resultObj.data[0], roles: roles });
+        var output = JSON.stringify({ "message": "ok", "token": refreshedToken, "val": "0", "result": resultObj.data[0], roles: roles });
         res.status(200).json(output);
         //console.log(resultObj.data[0][0].validToken);
         //console.log(tmpData)
@@ -1416,14 +1562,14 @@ app.post("/ExecSP",   async function (req, res, next) {
         res.status(400).json(output);
         //res.status(500).end();
     }
-   
+
     //res.send(result);
 });
 
-app.post("/ExecSPM",   async function (req, res, next) {
+app.post("/ExecSPM", async function (req, res, next) {
     var result;
     var refreshedToken = null;
-    var roles= {};
+    var roles = {};
     var lstUpdTs;
     var funcId;
     //console.log("execSp")
@@ -1442,7 +1588,7 @@ app.post("/ExecSPM",   async function (req, res, next) {
 
     //passport.authenticate('jwt', { session: false }),
     //console.log(req.get('Authorization'))
-    if(req.body.token) {
+    if (req.body.token) {
         var token = req.body.token;//req.get('Authorization');
         token = token.toString().replace("JWT ", "")
 
@@ -1454,18 +1600,18 @@ app.post("/ExecSPM",   async function (req, res, next) {
         //console.log((Date.now().valueOf()/ 1000))
         //console.log(new Date(originalDecoded.payload.exp * 1000))
 
-        
-        if( Number(originalDecoded.payload.exp) < (Date.now().valueOf() / 1000)) {
-            var output = JSON.stringify({ "message": "fail", "token": null, "val": "-2", "result":"Token expired." });
+
+        if (Number(originalDecoded.payload.exp) < (Date.now().valueOf() / 1000)) {
+            var output = JSON.stringify({ "message": "fail", "token": null, "val": "-2", "result": "Token expired." });
             return res.status(400).json(output);
         }
-        
+
         var retVal = await checkToken(originalDecoded.payload.authID)
-        if(!retVal) {
-            var output = JSON.stringify({ "message": "fail", "token": null,"val": "-2", "result": "Not a valid token." });
+        if (!retVal) {
+            var output = JSON.stringify({ "message": "fail", "token": null, "val": "-2", "result": "Not a valid token." });
             return res.status(400).json(output);
         }
-        
+
         //var output = JSON.stringify({ "message": "fail", "token": null, "result": "expired" });
         //res.status(200).json(output);
         /*
@@ -1476,51 +1622,51 @@ app.post("/ExecSPM",   async function (req, res, next) {
         */
         refreshedToken = jwt.refresh(originalDecoded, Number(config.get(env + ".token").timeout || 300), jwtOptions.secretOrKey);
 
-        if(originalDecoded.payload.lstUpdTs) {
+        if (originalDecoded.payload.lstUpdTs) {
             lstUpdTs = originalDecoded.payload.lstUpdTs;
         } else {
             lstUpdTs = (new Date()).toLocaleDateString();
         }
 
         funcId = "0";
-        if(req.body.funcId) {
+        if (req.body.funcId) {
             funcId = req.body.funcId
         }
 
         var roleStr = await getRoles(originalDecoded.payload.userId, lstUpdTs, funcId);
         console.log(roleStr)
-        var roleObj = JSON.parse(roleStr);       
-        if(roleObj.message == "ok"){
-            if(roleObj.roles) {
+        var roleObj = JSON.parse(roleStr);
+        if (roleObj.message == "ok") {
+            if (roleObj.roles) {
                 roles = roleObj.roles;
                 lstUpdTs = roleObj.lstUpdTs;
                 originalDecoded.payload.lstUpdTs = lstUpdTs;
-                refreshedToken = jwt.refresh(originalDecoded, Number(config.get(env + ".token").timeout || 300), jwtOptions.secretOrKey);            
+                refreshedToken = jwt.refresh(originalDecoded, Number(config.get(env + ".token").timeout || 300), jwtOptions.secretOrKey);
             }
         } else {
             var output;
-            if(roleObj.val == "-2"){
-                output = JSON.stringify({ "message": "fail", "token": null,"val": "-2", "result": roleObj.result});
+            if (roleObj.val == "-2") {
+                output = JSON.stringify({ "message": "fail", "token": null, "val": "-2", "result": roleObj.result });
                 return res.status(400).json(output);
             } else {
-                output = JSON.stringify({ "message": "fail", "token": refreshedToken,"val": roleObj.val, "result": roleObj.result});
+                output = JSON.stringify({ "message": "fail", "token": refreshedToken, "val": roleObj.val, "result": roleObj.result });
                 return res.status(400).json(output);
             }
-        }        
+        }
         //console.log(refreshedToken)
         // new 'exp' value is later in the future. 
         //console.log(JSON.stringify(jwt.decode(refreshed, { complete: true })));           
-        
-    } else {    
+
+    } else {
         // if there is no token
         // return an error
-        var output = JSON.stringify({ "message": "fail", "token": null,"val": "-2", "result": "No token provided." });
+        var output = JSON.stringify({ "message": "fail", "token": null, "val": "-2", "result": "No token provided." });
         return res.status(400).json(output);
     }
-  
+
 
     let spName = req.body.spName;
-    let parmstr= JSON.stringify(req.body.parms);  
+    let parmstr = JSON.stringify(req.body.parms);
     //console.log(parmstr) 
     let parms = JSON.parse(parmstr);
     //console.log(parms)
@@ -1531,20 +1677,20 @@ app.post("/ExecSPM",   async function (req, res, next) {
         let keyArr = Object.keys(parms);
         //console.log(keyArr);
         // loop through the object, pushing values to the return array
-        keyArr.forEach((key,index) => {
-          //console.log(key);
-          parm[index] = parms[key];          
+        keyArr.forEach((key, index) => {
+            //console.log(key);
+            parm[index] = parms[key];
         });
 
         //parm[0] =  req.body.hv_table_i;
         //parm[1] =  req.body.hv_universal_name;
 
-        const tmpData =  await DBase.DB.execSP(spName, parm);
+        const tmpData = await DBase.DB.execSP(spName, parm);
 
         //console.log(tmpData)
         const resultObj = JSON.parse(tmpData);
         console.log(resultObj.data[0]);
-        var output = JSON.stringify({ "message": "ok", "token": refreshedToken, "val": "0","result": resultObj.data, roles: roles });
+        var output = JSON.stringify({ "message": "ok", "token": refreshedToken, "val": "0", "result": resultObj.data, roles: roles });
         res.status(200).json(output);
         //console.log(resultObj.data[0][0].validToken);
         //console.log(tmpData)
@@ -1554,7 +1700,7 @@ app.post("/ExecSPM",   async function (req, res, next) {
         res.status(400).json(output);
         //res.status(500).end();
     }
-   
+
     //res.send(result);
 });
 

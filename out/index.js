@@ -47,6 +47,7 @@ var fs = require('fs');
 var fetch = require('node-fetch');
 var nodemailer = require('nodemailer');
 var upload = require('jquery-file-upload-middleware');
+var PDFDocument = require('pdfkit');
 var config = require("config");
 //const axios = require('axios');
 //const ExtractJwt = passportJWT.ExtractJwt;
@@ -58,15 +59,15 @@ jwtOptions.secretOrKey = 'tasmanianDevil';
 // configure upload middleware
 upload.configure({
     uploadDir: __dirname + '/public/uploads',
-    uploadUrl: '/uploads',
-    imageVersions: {
+    uploadUrl: '/uploads'
+});
+/*
+imageVersions: {
         thumbnail: {
             width: 80,
             height: 80
         }
     }
-});
-/*
 var strategy = new JwtStrategy(jwtOptions,  function (jwt_payload, next) {
    
     console.log('payload received', jwt_payload);
@@ -227,9 +228,62 @@ function base64_decode(base64str, file) {
     console.log('******** File created from base64 encoded string ********');
 }
 //app.use(passport.initialize());
-app.use('/upload', upload.fileHandler());
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 app.use(bodyParser.json({ limit: '50mb' }));
+app.use('/apiupload', upload.fileHandler());
+// events
+upload.on('begin', function (fileInfo, req, res) {
+    console.log(fileInfo);
+    // fileInfo structure is the same as returned to browser
+    // { 
+    //     name: '3 (3).jpg',
+    //     originalName: '3.jpg',
+    //     size: 79262,
+    //     type: 'image/jpeg',
+    //     delete_type: 'DELETE',
+    //     delete_url: 'http://yourhost/upload/3%20(3).jpg',
+    //     url: 'http://yourhost/uploads/3%20(3).jpg',
+    //     thumbnail_url: 'http://youhost/uploads/thumbnail/3%20(3).jpg' 
+    // }
+});
+upload.on('abort', function (fileInfo, req, res) { });
+upload.on('end', function (fileInfo, req, res) {
+    var pdf = new PDFDocument({
+        size: 'A4',
+        info: {
+            Title: 'Tile of File Here',
+            Author: 'Buraq'
+        }
+    });
+    console.log("in PDF");
+    //console.log(req.body.filename)
+    // Write stuff into PDF
+    //Set the font size
+    pdf.fontSize(11);
+    //Using a standard PDF font
+    pdf.font('Times-Roman')
+        .text('Hello from Times Roman!')
+        .moveDown(0.5);
+    pdf.text('PO Number 123 -- Buraq');
+    pdf.moveDown(0.5);
+    pdf.image(__dirname + '/public/uploads/' + fileInfo.name, {
+        //fit: [500, 400],
+        align: 'center',
+        valign: 'center'
+    });
+    //595,842
+    // Stream contents to a file
+    pdf.pipe(fs.createWriteStream(__dirname + '/public/uploads/file.pdf'))
+        .on('finish', function () {
+        console.log('PDF closed');
+    });
+    // Close PDF and write file.
+    pdf.end();
+});
+upload.on('delete', function (fileInfo, req, res) { });
+upload.on('error', function (e, req, res) {
+    console.log(e.message);
+});
 app.io = io.sockets.on('connection', function (socket) {
     console.log('a user connected');
     //send Ping to client connection
@@ -294,6 +348,94 @@ console.log(conf.cols)
     res.end(result, 'binary');
     //res.status(200).send(new Buffer(result.toString(),'binary').toString("base64"));
     }
+});
+*/
+/*
+upload.on("end", function(fileinfo){
+
+    var user = "buraq";
+    var filemanager = upload.fileManager({
+        targetDir: __dirname + '/public/uploads/' + user,
+        targetUrl: "/uploads/" + fileInfo.sessionID
+    });
+
+    filemanager.move(fileInfo.name, "", function(err, result) {
+        console.dir(result);
+        var pdf = new PDFDocument({
+            size: 'LEGAL', // See other page sizes here: https://github.com/devongovett/pdfkit/blob/d95b826475dd325fb29ef007a9c1bf7a527e9808/lib/page.coffee#L69
+            info: {
+              Title: 'Tile of File Here',
+              Author: 'Buraq',
+            }
+          });
+          
+          console.log(req.body.filename)
+          pdf.image(__dirname + '/public/uploads/' + user + '/' + req.body.filename, {
+            fit: [250, 300],
+            align: 'center',
+            valign: 'center'
+         });
+          
+          // Write stuff into PDF
+          //pdf.text('Hello World');
+          
+          // Stream contents to a file
+          pdf.pipe(
+            fs.createWriteStream(__dirname + '/public/uploads/' + user + '/file.pdf')
+          )
+            .on('finish', function () {
+              console.log('PDF closed');
+            });
+          
+          // Close PDF and write file.
+          pdf.end();
+    })
+});
+*/
+/*
+app.use('/apiupload', function (req, res, next) {
+    var user = "buraq";
+
+    console.log("in ")
+    req.filemanager = upload.fileManager({
+        targetDir: __dirname + '/public/uploads/' + user,
+        targetUrl: '/uploads/' + user,
+    });
+
+    
+    req.filemanager.move(req.body.filename, '', function (err, result) {
+        // file gets moved to __dirname + '/public/u/' + user._id + '/profile'
+        if (!err) {
+            var pdf = new PDFDocument({
+                size: 'LEGAL', // See other page sizes here: https://github.com/devongovett/pdfkit/blob/d95b826475dd325fb29ef007a9c1bf7a527e9808/lib/page.coffee#L69
+                info: {
+                  Title: 'Tile of File Here',
+                  Author: 'Buraq',
+                }
+              });
+              
+              console.log(req.body.filename)
+              pdf.image(__dirname + '/public/uploads/' + user + '/' + req.body.filename, {
+                fit: [250, 300],
+                align: 'center',
+                valign: 'center'
+             });
+              
+              // Write stuff into PDF
+              //pdf.text('Hello World');
+              
+              // Stream contents to a file
+              pdf.pipe(
+                fs.createWriteStream(__dirname + '/public/uploads/' + user + '/file.pdf')
+              )
+                .on('finish', function () {
+                  console.log('PDF closed');
+                });
+              
+              // Close PDF and write file.
+              pdf.end();
+        }
+    });
 });
 */
 app.get('/excel', function (req, res) {
