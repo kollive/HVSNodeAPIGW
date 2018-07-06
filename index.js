@@ -10,6 +10,8 @@ const _ = require('lodash');
 const fs = require('fs');
 const fetch = require('node-fetch');
 const nodemailer = require('nodemailer');
+const upload = require('jquery-file-upload-middleware');
+
 
 import * as config from "config";
 import * as wrap from 'express-async-wrap';
@@ -25,6 +27,18 @@ var env = process.env.NODE_ENV || "Dev";
 var jwtOptions = {}
 //jwtOptions.jwtFromRequest = ExtractJwt.fromAuthHeader();
 jwtOptions.secretOrKey = 'tasmanianDevil';
+
+ // configure upload middleware
+ upload.configure({
+    uploadDir: __dirname + '/public/uploads',
+    uploadUrl: '/uploads',
+    imageVersions: {
+        thumbnail: {
+            width: 80,
+            height: 80
+        }
+    }
+});
 
 
 /*
@@ -190,6 +204,7 @@ function base64_decode(base64str, file) {
 
 
 //app.use(passport.initialize());
+app.use('/upload', upload.fileHandler());
 app.use(bodyParser.urlencoded({limit :'50mb', extended: true }));
 app.use(bodyParser.json({limit: '50mb'}));
 

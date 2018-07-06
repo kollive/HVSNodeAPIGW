@@ -46,6 +46,7 @@ var _ = require('lodash');
 var fs = require('fs');
 var fetch = require('node-fetch');
 var nodemailer = require('nodemailer');
+var upload = require('jquery-file-upload-middleware');
 var config = require("config");
 //const axios = require('axios');
 //const ExtractJwt = passportJWT.ExtractJwt;
@@ -54,6 +55,17 @@ var env = process.env.NODE_ENV || "Dev";
 var jwtOptions = {};
 //jwtOptions.jwtFromRequest = ExtractJwt.fromAuthHeader();
 jwtOptions.secretOrKey = 'tasmanianDevil';
+// configure upload middleware
+upload.configure({
+    uploadDir: __dirname + '/public/uploads',
+    uploadUrl: '/uploads',
+    imageVersions: {
+        thumbnail: {
+            width: 80,
+            height: 80
+        }
+    }
+});
 /*
 var strategy = new JwtStrategy(jwtOptions,  function (jwt_payload, next) {
    
@@ -215,6 +227,7 @@ function base64_decode(base64str, file) {
     console.log('******** File created from base64 encoded string ********');
 }
 //app.use(passport.initialize());
+app.use('/upload', upload.fileHandler());
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 app.use(bodyParser.json({ limit: '50mb' }));
 app.io = io.sockets.on('connection', function (socket) {
